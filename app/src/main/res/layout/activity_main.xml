@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/activity_main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:gravity="center"
+    android:orientation="vertical"
+    tools:context="com.epayfull.stub.MainActivity">
+
+
+    <Button
+        android:text="CREATE"
+        android:layout_width="150dp"
+        android:layout_height="50dp"
+        android:layout_margin="10dp"
+        android:background="@drawable/button"
+        android:textSize="18sp"
+        android:onClick="create"
+        android:id="@+id/button" />
+
+    <Button
+        android:text="SAVED"
+        android:layout_width="150dp"
+        android:layout_height="50dp"
+        android:layout_margin="10dp"
+        android:background="@drawable/button"
+        android:textSize="18sp"
+        android:visibility="gone"
+        android:onClick="saved"
+        android:id="@+id/button1" />
+
+    <Button
+        android:text="RATE APP"
+        android:layout_width="150dp"
+        android:layout_height="50dp"
+        android:layout_margin="10dp"
+        android:background="@drawable/button"
+        android:textSize="18sp"
+        android:onClick="rateapp"
+        android:id="@+id/button2" />
+</LinearLayout>
