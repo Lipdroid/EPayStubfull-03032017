@@ -2,12 +2,16 @@ package com.epayfull.stub;
 
 import android.app.DatePickerDialog;
 import android.app.Dialog;
+import android.app.ProgressDialog;
+import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.os.AsyncTask;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -21,14 +25,33 @@ import android.widget.ListView;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import com.epayfull.stub.Constants.ConstantURLs;
+
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.NameValuePair;
+import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.entity.UrlEncodedFormEntity;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.message.BasicNameValuePair;
+import org.apache.http.util.EntityUtils;
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
+import java.util.List;
 
 public class CreateActivity extends AppCompatActivity {
 
     Spinner spinnerState, spinnerMarital, spinnerHowPaid, spinnerPayPeriod, spinnerExemptions, spinnerTurnOnOff,
             spinnerMaritalCheck, spinnerExemptionsCheck;
-    String state = "", marital = "", howPaid = "", payPeriod = "", exemption = "", turnOnOff = "", maritalCheck = "", exemptionCheck = "";
+    String state = "",state_spinner = "Alabama", marital = "", howPaid = "", payPeriod = "", exemption = "", turnOnOff = "", maritalCheck = "", exemptionCheck = "";
     EditText editHourRate, editTotalHour, editcmpnyname, editcmpnyadrs1, editcmpnyadrs2, editEmployee, editEmployeeName,
             editAdrs1, editAdrs2, editRegularRate, editRegularHour, editRegularTotal, editRegularYtd, editOvertimeRate,
             editOvertimeHour, editOvertimeTotal, editOvertimeYtd, editFicaTotal, editFicaTotalYtd,
@@ -164,13 +187,17 @@ public class CreateActivity extends AppCompatActivity {
             "WV",
             "WI",
             "WY"};
+    private ProgressDialog pDialog;
+    Context mContext = null;
+
+    HashMap<String,String> tax_rates = null;
 
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_create);
-
+        mContext = this;
         init();
     }
 
@@ -242,6 +269,7 @@ public class CreateActivity extends AppCompatActivity {
         editTotalYtdDed.addTextChangedListener(new NumberTextWatcher(editTotalYtdDed));
         editTotalNetPay.addTextChangedListener(new NumberTextWatcher(editTotalNetPay));
         editTotalYtdNetPay.addTextChangedListener(new NumberTextWatcher(editTotalYtdNetPay));
+        new getTax().execute();
 
         setOldData();
         ArrayAdapter<String> spinnerStateAdapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, arrStates);
@@ -252,6 +280,9 @@ public class CreateActivity extends AppCompatActivity {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 state = arrStates[position];
+                state_spinner = arrStates[position];
+                if(tax_rates != null)
+                    changeStateTax();
             }
 
             @Override
@@ -426,17 +457,26 @@ public class CreateActivity extends AppCompatActivity {
                 editTotal.setText(String.format("%.2f", alltotal));
                 editYtd.setText(String.format("%.2f", (alltotal + defaultytd)));
 
-                double ficamedicare = (totalRegular + totalOvertime) * 6.2 / 100;
-                double ficamedisocial = (totalRegular + totalOvertime) * 2.9 / 100;
-                double federal = (totalRegular + totalOvertime) * 6.2 / 100;
-                double state = (totalRegular + totalOvertime) * 5 / 100;
+//                double ficamedicare = (totalRegular + totalOvertime) * 6.2 / 100;
+//                double ficamedisocial = (totalRegular + totalOvertime) * 2.9 / 100;
+//                double federal = (totalRegular + totalOvertime) * 6.2 / 100;
+//                double state = (totalRegular + totalOvertime) * 5 / 100;
+                double ficamedicare = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("medicare"))/100;
+                double ficamedisocial = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("social_security"))/100;
+                double federal = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("federal"))/100;
+                double state = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get(state_spinner))/100;
 
                 double nettotal = alltotal - (ficamedicare + ficamedisocial + federal + state);
 
-                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
-                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 2.9 / 100;
-                double federalytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
-                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+//                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
+//                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 2.9 / 100;
+//                double federalytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
+//                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+
+                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("medicare"))/100;
+                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("social_security"))/100;
+                double federalytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("federal"))/100;
+                double stateytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get(state_spinner))/100;
 
                 double nettotalytd = (alltotal + defaultytd) - (ficamedicareytd + ficamedisocialytd + federalytd + stateytd);
 
@@ -487,17 +527,33 @@ public class CreateActivity extends AppCompatActivity {
                 editTotal.setText(String.format("%.2f", alltotal));
                 editYtd.setText(String.format("%.2f", (alltotal + defaultytd)));
 
-                double ficamedicare = (totalRegular + totalOvertime) * 1.45 / 100;
-                double ficamedisocial = (totalRegular + totalOvertime) * 6.2 / 100;
-                double federal = (totalRegular + totalOvertime) * 5.6 / 100;
-                double state = (totalRegular + totalOvertime) * 5 / 100;
+//                double ficamedicare = (totalRegular + totalOvertime) * 1.45 / 100;
+//                double ficamedisocial = (totalRegular + totalOvertime) * 6.2 / 100;
+//                double federal = (totalRegular + totalOvertime) * 5.6 / 100;
+//                double state = (totalRegular + totalOvertime) * 5 / 100;
+
+                Log.e("medicare",tax_rates.get("medicare"));
+                Log.e("social_security",tax_rates.get("social_security"));
+                Log.e("federal",tax_rates.get("federal"));
+                Log.e("state_spinner",tax_rates.get(state_spinner));
+
+
+                double ficamedicare = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("medicare"))/100;
+                double ficamedisocial = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("social_security"))/100;
+                double federal = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("federal"))/100;
+                double state = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get(state_spinner))/100;
 
                 double nettotal = alltotal - (ficamedicare + ficamedisocial + federal + state);
 
-                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
-                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
-                double federalytd = (totalRegular + totalOvertime + defaultytd) * 5.6 / 100;
-                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+//                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
+//                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
+//                double federalytd = (totalRegular + totalOvertime + defaultytd) * 5.6 / 100;
+//                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+
+                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("medicare"))/100;
+                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("social_security"))/100;
+                double federalytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("federal"))/100;
+                double stateytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get(state_spinner))/100;
 
                 double nettotalytd = (alltotal + defaultytd) - (ficamedicareytd + ficamedisocialytd + federalytd + stateytd);
 
@@ -605,17 +661,27 @@ public class CreateActivity extends AppCompatActivity {
                 editTotal.setText(String.format("%.2f", alltotal));
                 editYtd.setText(String.format("%.2f", (alltotal + defaultytd)));
 
-                double ficamedicare = (totalRegular + totalOvertime) * 1.45 / 100;
-                double ficamedisocial = (totalRegular + totalOvertime) * 6.2 / 100;
-                double federal = (totalRegular + totalOvertime) * 5.6 / 100;
-                double state = (totalRegular + totalOvertime) * 5 / 100;
+//                double ficamedicare = (totalRegular + totalOvertime) * 1.45 / 100;
+//                double ficamedisocial = (totalRegular + totalOvertime) * 6.2 / 100;
+//                double federal = (totalRegular + totalOvertime) * 5.6 / 100;
+//                double state = (totalRegular + totalOvertime) * 5 / 100;
+
+                double ficamedicare = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("medicare"))/100;
+                double ficamedisocial = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("social_security"))/100;
+                double federal = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("federal"))/100;
+                double state = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get(state_spinner))/100;
 
                 double nettotal = alltotal - (ficamedicare + ficamedisocial + federal + state);
 
-                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
-                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
-                double federalytd = (totalRegular + totalOvertime + defaultytd) * 5.6 / 100;
-                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+//                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
+//                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
+//                double federalytd = (totalRegular + totalOvertime + defaultytd) * 5.6 / 100;
+//                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+
+                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("medicare"))/100;
+                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("social_security"))/100;
+                double federalytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("federal"))/100;
+                double stateytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get(state_spinner))/100;
 
                 double nettotalytd = (alltotal + defaultytd) - (ficamedicareytd + ficamedisocialytd + federalytd + stateytd);
 
@@ -665,17 +731,27 @@ public class CreateActivity extends AppCompatActivity {
                 editTotal.setText(String.format("%.2f", alltotal));
                 editYtd.setText(String.format("%.2f", alltotal));
 
-                double ficamedicare = (totalRegular + totalOvertime) * 1.45 / 100;
-                double ficamedisocial = (totalRegular + totalOvertime) * 6.2 / 100;
-                double federal = (totalRegular + totalOvertime) * 5.6 / 100;
-                double state = (totalRegular + totalOvertime) * 5 / 100;
+//                double ficamedicare = (totalRegular + totalOvertime) * 1.45 / 100;
+//                double ficamedisocial = (totalRegular + totalOvertime) * 6.2 / 100;
+//                double federal = (totalRegular + totalOvertime) * 5.6 / 100;
+//                double state = (totalRegular + totalOvertime) * 5 / 100;
+
+                double ficamedicare = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("medicare"))/100;
+                double ficamedisocial = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("social_security"))/100;
+                double federal = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("federal"))/100;
+                double state = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get(state_spinner))/100;
 
                 double nettotal = alltotal - (ficamedicare + ficamedisocial + federal + state);
 
-                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
-                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
-                double federalytd = (totalRegular + totalOvertime + defaultytd) * 5.6 / 100;
-                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+//                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
+//                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
+//                double federalytd = (totalRegular + totalOvertime + defaultytd) * 5.6 / 100;
+//                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+
+                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("medicare"))/100;
+                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("social_security"))/100;
+                double federalytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("federal"))/100;
+                double stateytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get(state_spinner))/100;
 
                 double nettotalytd = (alltotal + defaultytd) - (ficamedicareytd + ficamedisocialytd + federalytd + stateytd);
 
@@ -1013,6 +1089,70 @@ public class CreateActivity extends AppCompatActivity {
 
     }
 
+    private void changeStateTax() {
+
+        float regularHr = 0, regularRt = 0;
+        totalRegular = 0;
+        if (!editRegularHour.getText().toString().trim().equalsIgnoreCase("")) {
+            regularHr = Float.valueOf(editRegularHour.getText().toString().replaceAll(",", "").trim());
+        }
+
+        if (!editRegularRate.getText().toString().trim().equalsIgnoreCase("")) {
+            regularRt = Float.valueOf(editRegularRate.getText().toString().replaceAll(",", "").trim());
+        }
+
+        totalRegular = regularHr * regularRt;
+
+        double alltotal = totalRegular + totalOvertime;
+
+        editRegularTotal.setText(String.format("%.2f", totalRegular));
+        editRegularYtd.setText(String.format("%.2f", (totalRegular + defaultytd)));
+        editTotal.setText(String.format("%.2f", alltotal));
+        editYtd.setText(String.format("%.2f", (alltotal + defaultytd)));
+
+//                double ficamedicare = (totalRegular + totalOvertime) * 1.45 / 100;
+//                double ficamedisocial = (totalRegular + totalOvertime) * 6.2 / 100;
+//                double federal = (totalRegular + totalOvertime) * 5.6 / 100;
+//                double state = (totalRegular + totalOvertime) * 5 / 100;
+
+        Log.e("medicare",tax_rates.get("medicare"));
+        Log.e("social_security",tax_rates.get("social_security"));
+        Log.e("federal",tax_rates.get("federal"));
+        Log.e("state_spinner",tax_rates.get(state_spinner));
+
+
+        double ficamedicare = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("medicare"))/100;
+        double ficamedisocial = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("social_security"))/100;
+        double federal = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get("federal"))/100;
+        double state = (totalRegular + totalOvertime) * Double.parseDouble(tax_rates.get(state_spinner))/100;
+
+        double nettotal = alltotal - (ficamedicare + ficamedisocial + federal + state);
+
+//                double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * 1.45 / 100;
+//                double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * 6.2 / 100;
+//                double federalytd = (totalRegular + totalOvertime + defaultytd) * 5.6 / 100;
+//                double stateytd = (totalRegular + totalOvertime + defaultytd) * 5 / 100;
+
+        double ficamedicareytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("medicare"))/100;
+        double ficamedisocialytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("social_security"))/100;
+        double federalytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get("federal"))/100;
+        double stateytd = (totalRegular + totalOvertime + defaultytd) * Double.parseDouble(tax_rates.get(state_spinner))/100;
+
+        double nettotalytd = (alltotal + defaultytd) - (ficamedicareytd + ficamedisocialytd + federalytd + stateytd);
+
+        editFicaTotal.setText(String.format("%.2f", ficamedicare));
+        editFicaTotalYtd.setText(String.format("%.2f", ficamedicareytd));
+        editFicaSocialTotal.setText(String.format("%.2f", ficamedisocial));
+        editFicaSocialTotalYtd.setText(String.format("%.2f", ficamedisocialytd));
+        editFederalTotal.setText(String.format("%.2f", federal));
+        editFederalTotalYtd.setText(String.format("%.2f", federalytd));
+        editStateTotal.setText(String.format("%.2f", state));
+        editStateTotalYtd.setText(String.format("%.2f", stateytd));
+
+        editTotalNetPay.setText(String.format("%.2f", nettotal));
+        editTotalYtdNetPay.setText(String.format("%.2f", nettotalytd));
+    }
+
     public void sendNext() {
 
 
@@ -1253,6 +1393,7 @@ public class CreateActivity extends AppCompatActivity {
         editFicaTotal.setText(_preference.getString("editFicaTotal", ""));
         editFicaTotalYtd.setText(_preference.getString("editFicaTotalYtd", ""));
         editFicaSocialTotalYtd.setText(_preference.getString("editFicaSocialTotalYtd", ""));
+        editFicaSocialTotal.setText(_preference.getString("editFicaSocialTotal", ""));
         editFederalTotal.setText(_preference.getString("editFederalTotal", ""));
         editFederalTotalYtd.setText(_preference.getString("editFederalTotalYtd", ""));
         editStateTotal.setText(_preference.getString("editStateTotal", ""));
@@ -1266,6 +1407,75 @@ public class CreateActivity extends AppCompatActivity {
         editSocialSecurityNumber.setText(_preference.getString("editSocialSecurityNumber", ""));
 
     }
+
+    private class getTax extends AsyncTask<Void , Void, Void> {
+
+        @Override
+        protected void onPreExecute() {
+            super.onPreExecute();
+            pDialog = new ProgressDialog(mContext);
+            pDialog.setMessage("Loading...");
+            pDialog.show();
+        }
+
+        @Override
+        protected Void doInBackground(Void... voids) {
+            // Create a new HttpClient and Post Header
+            HttpClient httpclient = new DefaultHttpClient();
+            String URL= ConstantURLs.URL_MAIN;
+            HttpPost httppost = new HttpPost(URL);
+            try {
+                //add data
+                List<NameValuePair> nameValuePairs = new ArrayList<NameValuePair>();
+                nameValuePairs.add(new BasicNameValuePair("tag", "getTaxRates"));
+
+                httppost.setEntity(new UrlEncodedFormEntity(nameValuePairs));
+
+                //execute http post
+                HttpResponse response = httpclient.execute(httppost);
+                HttpEntity httpEntity = response.getEntity();
+                String mJson = EntityUtils.toString(httpEntity);
+
+                Log.e("Response", mJson.toString());
+
+                JSONObject jObj = new JSONObject(mJson);
+
+                if(jObj.has("success")){
+                    if(jObj.getString("success").equals("1")){
+                        tax_rates = new HashMap<String, String>();
+                        JSONArray jArray = jObj.getJSONArray("tax_rates");
+                          for (int i =0;i<jArray.length();i++){
+                              JSONObject json = jArray.getJSONObject(i);
+                              String state = json.getString("state");
+                              String rate = json.getString("rate");
+                              tax_rates.put(state,rate);
+                          }
+
+                    }else{
+                        pDialog.dismiss();
+                    }
+                }
+
+            } catch (ClientProtocolException e) {
+            pDialog.dismiss();
+
+        } catch (IOException e) {
+            pDialog.dismiss();
+
+        } catch (JSONException e) {
+            pDialog.dismiss();
+        }
+            return null;
+        }
+
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            super.onPostExecute(aVoid);
+            pDialog.dismiss();
+        }
+    }
+
 
 
 }
